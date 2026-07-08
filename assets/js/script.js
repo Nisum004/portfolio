@@ -2,24 +2,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // 1. Header Scroll Effect
   const header = document.querySelector('.main-header');
   window.addEventListener('scroll', () => {
-    if (window.scrollY > 50) {
+    if (window.scrollY > 40) {
       header.classList.add('scrolled');
     } else {
       header.classList.remove('scrolled');
     }
   });
-  // 2. Bento Card Interactive Mouse Tracker (Glow Effect)
-  const bentoCards = document.querySelectorAll('.bento-card');
-  bentoCards.forEach(card => {
-    card.addEventListener('mousemove', (e) => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      card.style.setProperty('--mouse-x', `${x}px`);
-      card.style.setProperty('--mouse-y', `${y}px`);
-    });
-  });
-  // 3. Project Dialog Modals handler
+
+  // 2. Project Dialog Modals handler
   const projectButtons = document.querySelectorAll('.open-project');
   projectButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -30,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
   // Close buttons inside dialogs
   const closeDialogButtons = document.querySelectorAll('.close-dialog');
   closeDialogButtons.forEach(button => {
@@ -40,7 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
-  // Close dialog on clicking outside the wrapper (backdrop click)
+
+  // Close dialog on clicking backdrop
   const dialogs = document.querySelectorAll('.project-dialog');
   dialogs.forEach(dialog => {
     dialog.addEventListener('click', (e) => {
@@ -56,18 +48,19 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
-  // 4. Fallback for Scroll Reveal Animations (e.g. Firefox)
+
+  // 3. Fallback for Scroll Reveal Animations
   const supportsScrollTimeline = window.CSS && 
     CSS.supports('animation-timeline', 'view()') && 
     CSS.supports('animation-range', 'entry');
+
   if (!supportsScrollTimeline) {
-    // Add CSS fallback dynamically for browsers without scroll-timeline
     const styleSheet = document.createElement('style');
     styleSheet.innerText = `
       .scroll-reveal {
         opacity: 0;
-        transform: translateY(30px);
-        transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: translateY(20px);
+        transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .scroll-reveal.in-view {
         opacity: 1;
@@ -75,181 +68,169 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     `;
     document.head.appendChild(styleSheet);
+
     const revealObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           entry.target.classList.add('in-view');
-          revealObserver.unobserve(entry.target); // Reveal only once
+          revealObserver.unobserve(entry.target);
         }
       });
     }, {
-      threshold: 0.15
+      threshold: 0.12
     });
+
     document.querySelectorAll('.scroll-reveal').forEach(el => {
       revealObserver.observe(el);
     });
   }
-  // 5. Interactive Console Simulator (Mock CV RAG Agent)
-  const terminalBody = document.getElementById('terminal-body');
-  const terminalForm = document.getElementById('terminal-form');
-  const terminalInput = document.getElementById('terminal-input');
+
+  // 4. OpenAI-Inspired Playground Logic
+  const pgOutput = document.getElementById('pg-output');
+  const pgForm = document.getElementById('pg-form');
+  const pgInput = document.getElementById('pg-input');
   
-  // Quick-select command buttons
-  const cmdButtons = document.querySelectorAll('.cmd-btn');
-  cmdButtons.forEach(btn => {
+  const sliderTemp = document.getElementById('slider-temp');
+  const valTemp = document.getElementById('val-temp');
+  const sliderTokens = document.getElementById('slider-tokens');
+  const valTokens = document.getElementById('val-tokens');
+  const modelSelect = document.getElementById('model-select');
+
+  // Sync range input values with display labels
+  sliderTemp.addEventListener('input', () => {
+    valTemp.textContent = parseFloat(sliderTemp.value).toFixed(2);
+  });
+
+  sliderTokens.addEventListener('input', () => {
+    valTokens.textContent = sliderTokens.value;
+  });
+
+  // Quick Query Buttons
+  const queryButtons = document.querySelectorAll('.pg-query-btn');
+  queryButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      const cmd = btn.getAttribute('data-cmd');
-      executeTerminalCommand(cmd);
+      const query = btn.getAttribute('data-query');
+      executePlaygroundQuery(query);
     });
   });
-  terminalForm.addEventListener('submit', (e) => {
+
+  pgForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const query = terminalInput.value.trim();
+    const query = pgInput.value.trim();
     if (query) {
-      executeTerminalCommand(query);
-      terminalInput.value = '';
+      executePlaygroundQuery(query);
+      pgInput.value = '';
     }
   });
-  function executeTerminalCommand(inputStr) {
-    // Print input
-    const userLine = document.createElement('p');
-    userLine.className = 'terminal-prompt-line';
-    userLine.innerHTML = `<span class="prompt-user">nisum@ai-agent</span>:<span class="prompt-dir">~</span>$ <span class="cmd-run">${escapeHTML(inputStr)}</span>`;
-    terminalBody.appendChild(userLine);
-    // Generate output
-    const responseContainer = document.createElement('div');
-    responseContainer.className = 'terminal-response';
+
+  // Support Ctrl+Enter / Cmd+Enter inside the textarea to submit
+  pgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      pgForm.requestSubmit();
+    }
+  });
+
+  function executePlaygroundQuery(userInput) {
+    const temp = parseFloat(sliderTemp.value);
+    const maxTokens = parseInt(sliderTokens.value);
+    const model = modelSelect.value;
     
-    const command = inputStr.toLowerCase().trim();
-    let responseHTML = '';
-    if (command === 'help') {
-      responseHTML = `
-        <p>You can query Nisum's profile using the following standard commands or by asking questions:</p>
-        <div class="help-options-grid">
-          <button class="cmd-btn" data-cmd="about">about</button>
-          <button class="cmd-btn" data-cmd="projects">projects</button>
-          <button class="cmd-btn" data-cmd="skills">skills</button>
-          <button class="cmd-btn" data-cmd="contact">contact</button>
-          <button class="cmd-btn" data-cmd="clear">clear</button>
-        </div>
-        <p style="margin-top: 12px; color: var(--text-muted);">Or try custom questions like: "Tell me about HOT_DEALS", "What is your GPA?", "Do you know PyTorch?"</p>
+    // 1. Append User Bubble
+    const userMsg = document.createElement('div');
+    userMsg.className = 'msg user';
+    userMsg.innerHTML = `
+      <span class="msg-author font-mono">User (${model}):</span>
+      <p class="msg-text">${escapeHTML(userInput)}</p>
+    `;
+    pgOutput.appendChild(userMsg);
+
+    // 2. Compute Response based on input matching & Temperature
+    const responseText = getPlaygroundResponse(userInput, temp, maxTokens);
+    
+    // Simulate generation latency (300ms)
+    setTimeout(() => {
+      const assistantMsg = document.createElement('div');
+      assistantMsg.className = 'msg assistant';
+      assistantMsg.innerHTML = `
+        <span class="msg-author font-mono">Assistant (temp=${temp.toFixed(2)}, tokens=${maxTokens}):</span>
+        <div class="msg-text">${responseText}</div>
       `;
-    } else if (command === 'about') {
-      responseHTML = `
-        <p><strong>Nisum Yonghang</strong> — LLM, AI, and Machine Learning Engineer.</p>
-        <p>Currently pursuing a Bachelor of Science in Computer Science & Information Technology (CSIT) at St. Xavier's College, Maitighar (GPA: 3.65).</p>
-        <p>Nisum specializes in natural language processing (NLP), designing autonomous multi-agent networks, implementing Retrieval-Augmented Generation (RAG), and training computer vision detectors.</p>
-      `;
-    } else if (command === 'projects') {
-      responseHTML = `
-        <p>Nisum has developed several production-grade systems. Type the project name to get details:</p>
-        <ul>
-          <li><strong>hot-deals</strong>: Multi-Agent AI pricing system (Python, LangChain, RAG)</li>
-          <li><strong>vehicle-detection</strong>: Intersection tracking (YOLOv11, OpenCV)</li>
-          <li><strong>tea-leaf</strong>: Pathogen classifier in Jhapa (PyTorch, Grad-CAM)</li>
-          <li><strong>hand-sign</strong>: Real-time gestural model (PyTorch, OpenCV)</li>
-          <li><strong>pneumonia</strong>: Medical diagnostics (PyTorch, X-rays)</li>
-        </ul>
-        <p style="margin-top: 8px; color: var(--text-muted);">Example: Ask "tell me about hot deals" or click "View Case Study" above.</p>
-      `;
-    } else if (command === 'skills') {
-      responseHTML = `
-        <p><strong>Programming Languages:</strong> Python, Javascript, C++, Java, C, PHP</p>
-        <p><strong>AI & NLP:</strong> Large Language Models (LLMs), RAG, Multi-Agent Systems, LangChain, LiteLLM, QLoRA/LoRA fine-tuning</p>
-        <p><strong>Machine Learning:</strong> Deep Learning, PyTorch, Computer Vision, OpenCV, YOLOv11, CNNs, Object Tracking</p>
-        <p><strong>Infrastructure:</strong> AWS (Amazon Web Services), Git, GitHub, MySQL, Postman, Label Studio</p>
-      `;
-    } else if (command === 'contact') {
-      responseHTML = `
-        <p>Let's build something together! You can reach Nisum via:</p>
-        <p>— <strong>Email:</strong> <a href="mailto:izanamitube@gmail.com" style="color: #fff;">izanamitube@gmail.com</a></p>
-        <p>— <strong>Phone:</strong> +977-9863692418</p>
-        <p>— <strong>LinkedIn:</strong> <a href="https://www.linkedin.com/in/nisum-limbu" target="_blank" style="color: #fff;">linkedin.com/in/nisum-limbu</a></p>
-        <p>— <strong>GitHub:</strong> <a href="https://github.com/Nisum004" target="_blank" style="color: #fff;">github.com/Nisum004</a></p>
-      `;
-    } else if (command === 'clear') {
-      terminalBody.innerHTML = '';
-      // Reset welcome text
-      const welcome = document.createElement('p');
-      welcome.className = 'terminal-welcome-text';
-      welcome.innerText = "Nisum's AI Assistant Profile Console v1.0.0. Console cleared. Type 'help' to see options.";
-      terminalBody.appendChild(welcome);
-      return;
-    } else if (containsAny(command, ['hot_deals', 'hot deals', 'bargain', 'agent', 'deals'])) {
-      responseHTML = `
-        <p><strong>HOT_DEALS — Multi-Agent AI System</strong></p>
-        <p>Tech Stack: Python, LangChain, LiteLLM, RAG, Multi-Agent Architecture, Gradio</p>
-        <p>• Engineered a network of specialized AI agents cooperating for information extraction, pricing trends analysis, and value validation.</p>
-        <p>• Utilized RAG to feed active market catalogs into decision pipelines, triggering automated bargain alerts.</p>
-      `;
-    } else if (containsAny(command, ['vehicle', 'car', 'yolo', 'traffic', 'counting'])) {
-      responseHTML = `
-        <p><strong>Vehicle Detection and Counting System</strong></p>
-        <p>Tech Stack: Python, YOLOv11, OpenCV, PyTorch, NumPy</p>
-        <p>• Built a high-frequency tracking pipeline detecting vehicles crossing intersecting lines.</p>
-        <p>• Managed centroid tracking vectors to trace lane flows and log metrics in real time.</p>
-      `;
-    } else if (containsAny(command, ['tea', 'leaf', 'disease', 'crop', 'jhapa'])) {
-      responseHTML = `
-        <p><strong>Tea Leaf Disease Classification</strong></p>
-        <p>Tech Stack: Python, PyTorch, torchvision, OpenCV, matplotlib, Transfer Learning</p>
-        <p>• Gathered and segmented crop images directly from Sunkoshi Tea Estate (Jhapa) to build pathological models.</p>
-        <p>• Mapped convolutional activations utilizing Grad-CAM to present explainable heatmaps to growers.</p>
-      `;
-    } else if (containsAny(command, ['hand', 'sign', 'gesture', 'translation'])) {
-      responseHTML = `
-        <p><strong>Hand Sign Detection System</strong></p>
-        <p>Tech Stack: Python, PyTorch, OpenCV, NumPy</p>
-        <p>• Engineered a CNN classifying hand geometries from webcam video in real time.</p>
-        <p>• Integrated morphology filters and dynamic gesture vectors mapping coordinates directly to web scrolls.</p>
-      `;
-    } else if (containsAny(command, ['pneumonia', 'x-ray', 'medical', 'chest'])) {
-      responseHTML = `
-        <p><strong>Pneumonia Detection using Chest X-Ray Images</strong></p>
-        <p>Tech Stack: Python, PyTorch, Scikit-Learn, Matplotlib, Grad-CAM</p>
-        <p>• Developed deep neural classification models scanning chest radiographs to screen pulmonary pathologies.</p>
-        <p>• Integrated Grad-CAM visualization to output diagnostic overlays outlining lesion areas.</p>
-      `;
-    } else if (containsAny(command, ['gpa', 'grades', 'score', 'percentage'])) {
-      responseHTML = `
-        <p>Nisum maintains excellent academic results:</p>
-        <p>• <strong>B.Sc. CSIT</strong> (St. Xavier's College): <strong>3.65 GPA</strong></p>
-        <p>• <strong>Science Diploma</strong> (Little Angel's College): <strong>3.22 GPA</strong></p>
-      `;
-    } else if (containsAny(command, ['education', 'college', 'school', 'study', 'university'])) {
-      responseHTML = `
-        <p>• <strong>Bachelors in CSIT</strong> (2022 - Present) | St. Xavier’s College, Maitighar, Kathmandu</p>
-        <p>• <strong>Academic Diploma in Science</strong> (2019 - 2021) | Little Angel's College, Lalitpur</p>
-      `;
-    } else if (containsAny(command, ['pytorch', 'tensorflow', 'machine learning', 'deep learning', 'ml', 'ai'])) {
-      responseHTML = `
-        <p>Nisum has a robust ML toolkit:</p>
-        <p>• Deep model training using <strong>PyTorch</strong> and torchvision.</p>
-        <p>• CV architectures (YOLOv11, custom CNNs, morphology segmentation, object tracking).</p>
-        <p>• LLM applications (LangChain, LiteLLM, agent logic, fine-tuning using QLoRA).</p>
-      `;
-    } else {
-      // Default conversational response simulating a smart AI agent
-      responseHTML = `
-        <p>Command not recognized. However, since I'm a simulated LLM assistant for Nisum:</p>
-        <p>I see you are interested in "<em>${escapeHTML(inputStr)}</em>". Nisum specializes in building production-ready AI pipelines, full-stack systems, and training neural networks.</p>
-        <p>Try typing <strong>about</strong>, <strong>projects</strong>, or <strong>contact</strong> to get specific data, or click one of the quick buttons below.</p>
+      pgOutput.appendChild(assistantMsg);
+      pgOutput.scrollTop = pgOutput.scrollHeight;
+    }, 300);
+  }
+
+  function getPlaygroundResponse(inputStr, temp, maxTokens) {
+    const query = inputStr.toLowerCase().trim();
+    
+    // Define base answers matching CV facts
+    let facts = {
+      about: "Nisum Yonghang is an LLM, AI, and Machine Learning Specialist currently pursuing a Bachelor of Science in Computer Science & Information Technology (CSIT) at St. Xavier's College, Maitighar (GPA: 3.65). He focuses on agentic AI networks, RAG search pipelines, and PyTorch deep models.",
+      projects: "Nisum's major projects include:<br>• <strong>HOT_DEALS</strong>: Multi-Agent AI System utilizing LangChain and RAG to track pricing bargains.<br>• <strong>Vehicle Detection</strong>: Traffic counting framework using YOLOv11 and OpenCV tracking centroids.<br>• <strong>Tea Leaf path classification</strong>: Pathogen CNN in Jhapa with Grad-CAM activation overlays.<br>• <strong>Hand Sign detection</strong>: Real-time gestural tracking mapping skin-morphology vectors.<br>• <strong>Pneumonia scanner</strong>: Radiological CNN diagnosing chest radiographs.",
+      skills: "<strong>Languages:</strong> Python, Javascript, C++, Java, C, PHP.<br><strong>AI & LLMs:</strong> Large Language Models, RAG, Multi-Agent Systems, LangChain, LiteLLM, QLoRA/LoRA fine-tuning.<br><strong>Deep Learning:</strong> PyTorch, OpenCV, YOLOv11, CNNs, Centroid Object Tracking, Grad-CAM.<br><strong>Tools:</strong> AWS, Git, GitHub, MySQL, Postman, Label Studio.",
+      contact: "Let's collaborate! You can reach Nisum here:<br>• Email: <a href='mailto:izanamitube@gmail.com'>izanamitube@gmail.com</a><br>• Phone: +977-9863692418<br>• LinkedIn: <a href='https://www.linkedin.com/in/nisum-limbu' target='_blank'>linkedin.com/in/nisum-limbu</a><br>• GitHub: <a href='https://github.com/Nisum004' target='_blank'>github.com/Nisum004</a>"
+    };
+
+    // Determine target category
+    let category = 'default';
+    if (containsAny(query, ['about', 'profile', 'nisum', 'who are you', 'bio'])) {
+      category = 'about';
+    } else if (containsAny(query, ['projects', 'repos', 'code', 'portfolio'])) {
+      category = 'projects';
+    } else if (containsAny(query, ['skills', 'tools', 'languages', 'python', 'pytorch'])) {
+      category = 'skills';
+    } else if (containsAny(query, ['contact', 'email', 'phone', 'reach', 'social', 'github', 'linkedin'])) {
+      category = 'contact';
+    } else if (containsAny(query, ['hot deals', 'hot_deals', 'bargain', 'agent'])) {
+      return getProjectSpecificResponse('hot-deals', temp);
+    } else if (containsAny(query, ['vehicle', 'car', 'yolo', 'traffic'])) {
+      return getProjectSpecificResponse('vehicle-detection', temp);
+    } else if (containsAny(query, ['tea', 'leaf', 'disease'])) {
+      return getProjectSpecificResponse('tea-leaf', temp);
+    } else if (containsAny(query, ['hand', 'sign', 'gesture'])) {
+      return getProjectSpecificResponse('hand-sign', temp);
+    } else if (containsAny(query, ['pneumonia', 'x-ray', 'chest'])) {
+      return getProjectSpecificResponse('pneumonia', temp);
+    } else if (containsAny(query, ['gpa', 'grades', 'st. xavier', 'college'])) {
+      return adjustTextForTemperature("Nisum studies CSIT at St. Xavier's College with an overall GPA of 3.65. He completed high school science at Little Angel's College with a 3.22 GPA.", temp);
+    }
+
+    // Adapt text layout based on temperature slider
+    let baseText = facts[category] || `I see you queried "<em>${escapeHTML(inputStr)}</em>". As Nisum's virtual AI portfolio assistant, I can retrieve his projects, skills, education logs, and contact endpoints. Try clicking the quick buttons on the right or ask about a specific project!`;
+    
+    return adjustTextForTemperature(baseText, temp);
+  }
+
+  function getProjectSpecificResponse(projectId, temp) {
+    let details = {
+      'hot-deals': "<strong>HOT_DEALS — Multi-Agent AI System</strong><br>Tech Stack: Python, LangChain, LiteLLM, RAG, Gradio.<br>• Designed a network of autonomous agents cooperating to scrape, analyze, value-reason, and alert on retail bargain listings.<br>• Integrated RAG vector stores to reference real-time market averages and built a live Gradio dashboard.",
+      'vehicle-detection': "<strong>Vehicle Detection and Counting System</strong><br>Tech Stack: Python, YOLOv11, OpenCV, PyTorch, NumPy.<br>• Built a real-time computer vision system checking vehicle boundary intersections.<br>• Tracked lanes and centroid coordinates dynamically to count traffic rates.",
+      'tea-leaf': "<strong>Tea Leaf Disease Classification</strong><br>Tech Stack: Python, PyTorch, OpenCV, Grad-CAM, Transfer Learning.<br>• Trained custom ResNet classifiers on real leaves gathered from Sunkoshi Tea Estate in Jhapa.<br>• Visualized classification activations using Grad-CAM mapping to display explainable pathogen points.",
+      'hand-sign': "<strong>Hand Sign Detection System</strong><br>Tech Stack: Python, PyTorch, OpenCV, NumPy.<br>• Created CNN systems interpreting skin segmentation and gestural arrays from live video frames.<br>• Mapped geometric coordinates to translate alphabet postures to digital screen scroll outputs.",
+      'pneumonia': "<strong>Pneumonia Detection in Chest X-Rays</strong><br>Tech Stack: Python, PyTorch, Scikit-Learn, Grad-CAM.<br>• Trained CNN architectures diagnosing chest radiographs with high recall rate thresholds.<br>• Built Grad-CAM layers to outline pulmonary lesion activations directly for physicians."
+    };
+    return adjustTextForTemperature(details[projectId], temp);
+  }
+
+  function adjustTextForTemperature(text, temp) {
+    if (temp <= 0.2) {
+      // Formal, precise, dry
+      return `<p style="font-family: var(--font-sans); color: var(--text-primary); font-size: 0.9rem;">[System Log: Low-Temperature Factual Mode]<br>${text.replace(/<br>/g, ' ')}</p>`;
+    } else if (temp > 0.8) {
+      // Highly conversational, casual, fun, "tokenizer" notes
+      return `
+        <p style="margin-bottom: 8px;">🔥 <strong>High Temperature Creative Mode (${temp.toFixed(2)})</strong>: Generating stylized responses!</p>
+        <p>${text}</p>
+        <p style="margin-top: 10px; font-size: 0.75rem; color: var(--accent-purple); font-family: var(--font-mono);">
+          [Generation Info: Added creative tokens. No hallucinations detected. Nisum's actual CV facts remain 100% accurate.]
+        </p>
       `;
     }
-    responseContainer.innerHTML = responseHTML;
-    terminalBody.appendChild(responseContainer);
-    
-    // Add event listeners to any newly created command buttons inside responses
-    const newCmdButtons = responseContainer.querySelectorAll('.cmd-btn');
-    newCmdButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const cmd = btn.getAttribute('data-cmd');
-        executeTerminalCommand(cmd);
-      });
-    });
-    // Auto-scroll terminal body
-    terminalBody.scrollTop = terminalBody.scrollHeight;
+    // Normal output
+    return `<p>${text}</p>`;
   }
+
   function escapeHTML(str) {
     return str.replace(/[&<>'"]/g, 
       tag => ({
@@ -261,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }[tag] || tag)
     );
   }
+
   function containsAny(str, keywords) {
     return keywords.some(keyword => str.includes(keyword));
   }
